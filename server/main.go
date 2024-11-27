@@ -163,7 +163,7 @@ func tokenHandler(w http.ResponseWriter, r *http.Request) {
 		return pubKey, nil
 	}
 
-	vtoken, err := jwt.Parse(tok, keyfunc, jwt.WithValidMethods([]string{"RS256"}), jwt.WithIssuer("https://diy_sts"))
+	vtoken, err := jwt.Parse(tok, keyfunc, jwt.WithValidMethods([]string{"RS256"}), jwt.WithIssuer("https://my_kdc_server"), jwt.WithAudience("https://my_sts_exchange_server"))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error verifying token %v", err), http.StatusInternalServerError)
 		return
@@ -172,23 +172,39 @@ func tokenHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "     token not valid", http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
 
-	p := &TokenResponse{
-		AccessToken:     *staticToken,
-		IssuedTokenType: AccessToken,
-		TokenType:       "Bearer",
-		ExpiresIn:       int64(3600),
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-cache, no-store")
+	// >>> important, extract the subject or other claims and figure out if the user should get an access_token
 
-	err = json.NewEncoder(w).Encode(p)
+	sub, err := vtoken.Claims.GetSubject()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not marshall JSON to output %v", err)
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("Error getting subject %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	// for now i'm just setting a static one
+	if sub == "client1x" {
+		w.WriteHeader(http.StatusOK)
+		p := &TokenResponse{
+			AccessToken:     *staticToken,
+			IssuedTokenType: AccessToken,
+			TokenType:       "Bearer",
+			ExpiresIn:       int64(3600),
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache, no-store")
+
+		err = json.NewEncoder(w).Encode(p)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not marshall JSON to output %v", err)
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+		return
+	}
+	// otherwise unauthorized
+	w.Header().Set("Content-Type", "application/json")
+	http.Error(w, "{\"error\":\"invalid_request\",\"error_description\":\"Subject unauthorized\"}", http.StatusBadRequest)
 }
 
 func sendError(w http.ResponseWriter, r *http.Request, code int, message string) {
@@ -223,8 +239,9 @@ func authenticateHandler(w http.ResponseWriter, r *http.Request) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  &jwt.NumericDate{time.Now()},
 			ExpiresAt: &jwt.NumericDate{time.Now().Add(time.Second * 1)},
-			Issuer:    "https://diy_sts",
-			Audience:  jwt.ClaimStrings([]string{creds.UserName()}),
+			Issuer:    "https://my_kdc_server",
+			Audience:  jwt.ClaimStrings([]string{"https://my_sts_exchange_server"}),
+			Subject:   creds.UserName(),
 		},
 		Domain:    creds.Domain(),
 		SessionID: creds.SessionID(),
