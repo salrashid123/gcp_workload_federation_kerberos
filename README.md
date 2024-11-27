@@ -102,7 +102,7 @@ Now edit `/etc/krb5.conf` with the following.  Again, remember to change `$PROJE
 		kdc = kdc.us-central1-a.c.$PROJECT.internal
 		admin_server = kdc.us-central1-a.c.$PROJECT.internal
 
-        #disable_pac = true
+		disable_pac = true
 	}
 
 [domain_realm]
@@ -175,6 +175,8 @@ $ sudo apt install krb5-user sssd-krb5 dnsutils
 ## and Admin Host to : kdc.us-central1-a.c.$PROJECT.internal
 
 ### login and get a service ticket for HTTP/linux.domain.com
+#### # https://github.com/jcmturner/gokrb5/issues/545
+
 $ kinit --no-request-pac -S HTTP/linux.domain.com@DOMAIN.COM client1@DOMAIN.COM
 
 
