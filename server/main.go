@@ -69,6 +69,8 @@ func eventsMiddleware(h http.Handler) http.Handler {
 }
 func main() {
 
+	flag.Parse()
+
 	l := log.New(os.Stderr, "GOKRB5 Service: ", log.Ldate|log.Ltime|log.Lshortfile)
 
 	kt, err := keytab.Load(*keytabFile)
@@ -143,13 +145,13 @@ func tokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := r.ParseForm()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error parsing form POST %v", err), http.StatusInternalServerError)
+		fmt.Fprintf(os.Stderr, "error parsing form %v", err)
+		http.Error(w, "{\"error\":\"invalid_request\",\"error_description\":\"error parsing form\"}", http.StatusBadRequest)
 		return
 	}
+
 	tok := r.FormValue("subject_token")
-
 	aud := r.FormValue("audience")
-
 	//log.Printf("subject_token: %s\n", tok)
 	log.Printf("audience: %s\n", aud)
 
@@ -165,11 +167,14 @@ func tokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	vtoken, err := jwt.Parse(tok, keyfunc, jwt.WithValidMethods([]string{"RS256"}), jwt.WithIssuer("https://my_kdc_server"), jwt.WithAudience("https://my_sts_exchange_server"))
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error verifying token %v", err), http.StatusInternalServerError)
+		fmt.Fprintf(os.Stderr, "error verifying token %v", err)
+		http.Error(w, "{\"error\":\"invalid_request\",\"error_description\":\"error verifying token\"}", http.StatusBadRequest)
 		return
+
 	}
 	if !vtoken.Valid {
-		http.Error(w, "     token not valid", http.StatusInternalServerError)
+		fmt.Fprintf(os.Stderr, "error token not valid subject")
+		http.Error(w, "{\"error\":\"invalid_request\",\"error_description\":\"Invalid token\"}", http.StatusBadRequest)
 		return
 	}
 
@@ -177,12 +182,13 @@ func tokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	sub, err := vtoken.Claims.GetSubject()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error getting subject %v", err), http.StatusInternalServerError)
+		fmt.Fprintf(os.Stderr, "error getting subject %v", err)
+		http.Error(w, "{\"error\":\"invalid_request\",\"error_description\":\"Internal error getting subject\"}", http.StatusBadRequest)
 		return
 	}
 
 	// for now i'm just setting a static one
-	if sub == "client1x" {
+	if sub == "client1" {
 		w.WriteHeader(http.StatusOK)
 		p := &TokenResponse{
 			AccessToken:     *staticToken,

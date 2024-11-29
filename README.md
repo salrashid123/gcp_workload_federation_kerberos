@@ -332,6 +332,13 @@ file_content = blob.download_as_string()
 print(file_content)
 ```
 
+As a wireshark trace end-to-end over http1.1:
+
+```bash
+wireshark trace.cap -otls.keylog_file:keylog.log
+```
+
+![images/authorization_header.png](images/authorization_header.png)
 
 
 For more information about STS servers, see
