@@ -141,12 +141,33 @@ type TokenResponse struct {
 	RefreshToken    string `json:"refresh_token,omitempty"`
 }
 
+// https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
+// type retrieveError struct {
+// 	// ErrorCode is RFC 6749's 'error' parameter.
+// 	Error string `json:"error,omitempty"`
+// 	// ErrorDescription is RFC 6749's 'error_description' parameter.
+// 	ErrorDescription string `json:"error_description,omitempty"`
+// 	// ErrorURI is RFC 6749's 'error_uri' parameter.
+// 	ErrorURI string `json:"error_uri,omitempty"`
+// }
+
+func setError(errorMsg string, errorDescription string) string {
+	// e := &retrieveError{Error: errorMsg, ErrorDescription: errorDescription}
+	// b, err := json.Marshal(e)
+	// if err != nil {
+	//     fmt.Println(err)
+	//     return err
+	// }
+	// return string(b), nil
+	return fmt.Sprintf("{\"error\":\"%s\",\"error_description\":\"%s\"}", errorMsg, errorDescription)
+}
+
 func tokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := r.ParseForm()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error parsing form %v", err)
-		http.Error(w, "{\"error\":\"invalid_request\",\"error_description\":\"error parsing form\"}", http.StatusBadRequest)
+		http.Error(w, setError("invalid_request", "error parsing form"), http.StatusBadRequest)
 		return
 	}
 
@@ -168,13 +189,13 @@ func tokenHandler(w http.ResponseWriter, r *http.Request) {
 	vtoken, err := jwt.Parse(tok, keyfunc, jwt.WithValidMethods([]string{"RS256"}), jwt.WithIssuer("https://my_kdc_server"), jwt.WithAudience("https://my_sts_exchange_server"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error verifying token %v", err)
-		http.Error(w, "{\"error\":\"invalid_request\",\"error_description\":\"error verifying token\"}", http.StatusBadRequest)
+		http.Error(w, setError("invalid_request", "error verifying token"), http.StatusBadRequest)
 		return
 
 	}
 	if !vtoken.Valid {
 		fmt.Fprintf(os.Stderr, "error token not valid subject")
-		http.Error(w, "{\"error\":\"invalid_request\",\"error_description\":\"Invalid token\"}", http.StatusBadRequest)
+		http.Error(w, setError("invalid_request", "invalid token"), http.StatusBadRequest)
 		return
 	}
 
@@ -183,13 +204,12 @@ func tokenHandler(w http.ResponseWriter, r *http.Request) {
 	sub, err := vtoken.Claims.GetSubject()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error getting subject %v", err)
-		http.Error(w, "{\"error\":\"invalid_request\",\"error_description\":\"Internal error getting subject\"}", http.StatusBadRequest)
+		http.Error(w, setError("invalid_request", "Internal error getting subject"), http.StatusBadRequest)
 		return
 	}
 
 	// for now i'm just setting a static one
 	if sub == "client1" {
-		w.WriteHeader(http.StatusOK)
 		p := &TokenResponse{
 			AccessToken:     *staticToken,
 			IssuedTokenType: AccessToken,
@@ -210,7 +230,7 @@ func tokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// otherwise unauthorized
 	w.Header().Set("Content-Type", "application/json")
-	http.Error(w, "{\"error\":\"invalid_request\",\"error_description\":\"Subject unauthorized\"}", http.StatusBadRequest)
+	http.Error(w, setError("invalid_request", "Subject unauthorized"), http.StatusBadRequest)
 }
 
 func sendError(w http.ResponseWriter, r *http.Request, code int, message string) {
